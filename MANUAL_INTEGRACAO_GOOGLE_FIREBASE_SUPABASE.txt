@@ -1,0 +1,712 @@
+================================================================================
+MANUAL DE INTEGRAÇÃO: GOOGLE / FIREBASE + SUPABASE
+================================================================================
+Este manual serve como modelo para implementar autenticação com Google/Firebase
+e integração com Supabase para armazenar dados de usuários após login confirmado.
+
+================================================================================
+PARTE 1: CONFIGURAÇÃO DO FIREBASE
+================================================================================
+
+1.1 CRIAR PROJETO NO FIREBASE
+-----------------------------
+1. Acesse: https://console.firebase.google.com/
+2. Clique em "Adicionar projeto" ou "Create a project"
+3. Preencha:
+   - Nome do projeto: (ex: meu-app-firebase)
+   - Aceite os termos e clique em "Continuar"
+   - Desative Google Analytics (ou mantenha ativado, conforme preferência)
+   - Clique em "Criar projeto"
+4. Aguarde a criação e clique em "Continuar"
+
+1.2 CONFIGURAR FIREBASE AUTHENTICATION
+--------------------------------------
+1. No menu lateral, clique em "Authentication" (Autenticação)
+2. Clique em "Começar" ou "Get started"
+3. Vá na aba "Sign-in method" (Método de login)
+4. Clique em "Google"
+5. Ative o toggle "Enable"
+6. Configure:
+   - Email de suporte: seu-email@exemplo.com
+   - Nome do projeto: Nome do seu app
+7. Clique em "Salvar"
+
+1.3 CONFIGURAR DOMÍNIOS AUTORIZADOS
+------------------------------------
+1. Ainda em "Authentication", vá em "Settings" (Configurações)
+2. Role até "Authorized domains" (Domínios autorizados)
+3. Verifique se "localhost" já está na lista (geralmente já vem)
+4. Se precisar adicionar domínio de produção:
+   - Clique em "Add domain"
+   - Digite o domínio (ex: meusite.com.br)
+   - Clique em "Add"
+
+1.4 OBTER CREDENCIAIS DO FIREBASE
+----------------------------------
+1. No menu lateral, clique no ícone de engrenagem ao lado de "Visão geral do projeto"
+2. Clique em "Configurações do projeto"
+3. Role até "Seus aplicativos"
+4. Clique no ícone "</>" (Web) para adicionar um app web
+5. Preencha:
+   - Apelido do app: (ex: Web App)
+   - Marque "Também configure o Firebase Hosting" (opcional)
+6. Clique em "Registrar app"
+7. COPIE AS SEGUINTES CREDENCIAIS (você precisará delas):
+
+   apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+   authDomain: "seu-projeto.firebaseapp.com"
+   projectId: "seu-projeto-id"
+   storageBucket: "seu-projeto.appspot.com"
+   messagingSenderId: "123456789012"
+   appId: "1:123456789012:web:abcdef123456"
+   measurementId: "G-XXXXXXXXXX" (opcional)
+
+================================================================================
+PARTE 2: CONFIGURAÇÃO DO GOOGLE CLOUD CONSOLE
+================================================================================
+
+2.1 ATIVAR GOOGLE DRIVE API
+----------------------------
+1. Acesse: https://console.cloud.google.com/
+2. Selecione o projeto do Firebase (mesmo projeto criado acima)
+3. No menu lateral, vá em "APIs e Serviços" > "Biblioteca"
+4. Pesquise por "Google Drive API"
+5. Clique em "Google Drive API"
+6. Clique em "ATIVAR"
+
+2.2 CONFIGURAR TELA DE CONSENTIMENTO OAUTH
+-------------------------------------------
+1. No menu lateral, vá em "APIs e Serviços" > "Tela de consentimento OAuth"
+2. Se for a primeira vez:
+   - Selecione "Externo" (ou "Interno" se for apenas para sua organização)
+   - Clique em "CRIAR"
+3. Preencha "Passo 1 - Informações do app":
+   - Nome do app: Nome do seu aplicativo
+   - Email de suporte do usuário: seu-email@exemplo.com
+   - Email de contato do desenvolvedor: seu-email@exemplo.com
+   - Clique em "SALVAR E CONTINUAR"
+4. "Passo 2 - Escopos":
+   - Clique em "SALVAR E CONTINUAR" (os escopos serão adicionados automaticamente)
+5. "Passo 3 - Usuários de teste":
+   - Clique em "+ ADICIONAR USUÁRIOS"
+   - Adicione emails de usuários que podem testar o app
+   - Clique em "SALVAR E CONTINUAR"
+6. "Passo 4 - Resumo":
+   - Revise e clique em "VOLTAR AO PAINEL"
+
+2.3 CRIAR ID DO CLIENTE OAUTH 2.0
+----------------------------------
+1. No menu lateral, vá em "APIs e Serviços" > "Credenciais"
+2. Clique em "+ CRIAR CREDENCIAIS" > "ID do cliente OAuth"
+3. Tipo de aplicativo: "Aplicativo da Web"
+4. Nome: (ex: Web Client)
+5. Em "URIs de redirecionamento autorizados":
+   - Clique em "+ ADICIONAR URI"
+   - Adicione: http://localhost:3000 (ou a porta que você usa)
+   - Adicione: http://localhost:3000/login (opcional)
+   - Para produção, adicione: https://seu-dominio.com
+6. Clique em "CRIAR"
+7. COPIE O "ID DO CLIENTE" (Client ID) - você precisará dele
+   Exemplo: 123456789-abcdefghijklmnop.apps.googleusercontent.com
+
+2.4 CRIAR CHAVE DE API (OPCIONAL, mas recomendado)
+---------------------------------------------------
+1. Ainda em "Credenciais", clique em "+ CRIAR CREDENCIAIS" > "Chave de API"
+2. Uma janela popup aparecerá com a chave
+3. COPIE A CHAVE DE API
+   Exemplo: AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz
+4. (Opcional) Para maior segurança:
+   - Clique no ícone de lápis ao lado da chave
+   - Em "Restrições de API", selecione "Restringir chave"
+   - Selecione "Google Drive API"
+   - Clique em "SALVAR"
+
+================================================================================
+PARTE 3: INSTALAÇÃO E CONFIGURAÇÃO NO CÓDIGO
+================================================================================
+
+3.1 INSTALAR DEPENDÊNCIAS
+--------------------------
+Execute no terminal do projeto:
+
+npm install firebase
+npm install @supabase/supabase-js
+
+3.2 CRIAR ARQUIVO DE CONFIGURAÇÃO DO FIREBASE
+----------------------------------------------
+Crie um arquivo: src/config/firebase.js
+
+import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+
+const firebaseConfig = {
+  apiKey: "COLE_AQUI_SUA_API_KEY_DO_FIREBASE",
+  authDomain: "COLE_AQUI_SEU_AUTH_DOMAIN",
+  projectId: "COLE_AQUI_SEU_PROJECT_ID",
+  storageBucket: "COLE_AQUI_SEU_STORAGE_BUCKET",
+  messagingSenderId: "COLE_AQUI_SEU_MESSAGING_SENDER_ID",
+  appId: "COLE_AQUI_SEU_APP_ID"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
+
+// Adicionar escopos necessários para Google Drive
+googleProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+
+export { app, auth, googleProvider };
+
+3.3 CRIAR ARQUIVO DE CONFIGURAÇÃO DO SUPABASE
+----------------------------------------------
+Crie um arquivo: src/config/supabase.js
+
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = 'COLE_AQUI_SUA_URL_DO_SUPABASE'
+const supabaseAnonKey = 'COLE_AQUI_SUA_CHAVE_ANON_DO_SUPABASE'
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+NOTA: Para obter essas credenciais:
+1. Acesse: https://supabase.com/
+2. Crie uma conta e um projeto
+3. Vá em "Settings" > "API"
+4. Copie "Project URL" e "anon public" key
+
+3.4 CRIAR SERVIÇO DE AUTENTICAÇÃO
+----------------------------------
+Crie um arquivo: src/services/authService.js
+
+import { 
+  signInWithPopup, 
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  GoogleAuthProvider
+} from 'firebase/auth'
+import { auth, googleProvider } from '../config/firebase'
+import { supabase } from '../config/supabase'
+
+class AuthService {
+  // Fazer login com Google via Firebase
+  async signInWithGoogle() {
+    try {
+      // 1. Autenticar com Firebase/Google
+      const result = await signInWithPopup(auth, googleProvider)
+      const user = result.user
+      
+      // 2. Obter token de acesso do Google OAuth
+      const credential = GoogleAuthProvider.credentialFromResult(result)
+      const accessToken = credential?.accessToken
+      
+      // 3. Preparar dados do usuário
+      const userData = {
+        id: user.uid, // Firebase UID
+        name: user.displayName,
+        email: user.email,
+        imageUrl: user.photoURL,
+        provider: 'google',
+        google_access_token: accessToken // Token para usar com Google Drive API
+      }
+      
+      // 4. Salvar token no localStorage (para uso com Google Drive API)
+      if (accessToken) {
+        localStorage.setItem('google_oauth_access_token', accessToken)
+      }
+      
+      // 5. Salvar/atualizar usuário no Supabase
+      await this.saveUserToSupabase(userData)
+      
+      return {
+        user: userData,
+        token: accessToken
+      }
+    } catch (error) {
+      console.error('Erro ao fazer login:', error)
+      throw error
+    }
+  }
+
+  // Salvar ou atualizar usuário no Supabase
+  async saveUserToSupabase(userData) {
+    try {
+      // Verificar se a tabela 'users' existe no Supabase
+      // Se não existir, você precisa criá-la primeiro (veja seção 4.1)
+      
+      const { data, error } = await supabase
+        .from('users')
+        .upsert({
+          firebase_uid: userData.id,
+          email: userData.email,
+          name: userData.name,
+          image_url: userData.imageUrl,
+          provider: userData.provider,
+          last_login: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'firebase_uid' // Atualizar se já existir
+        })
+      
+      if (error) {
+        console.error('Erro ao salvar usuário no Supabase:', error)
+        throw error
+      }
+      
+      console.log('Usuário salvo/atualizado no Supabase:', data)
+      return data
+    } catch (error) {
+      console.error('Erro ao salvar no Supabase:', error)
+      // Não lançar erro aqui para não bloquear o login
+      // O login com Firebase já foi bem-sucedido
+    }
+  }
+
+  // Fazer logout
+  async signOut() {
+    try {
+      await firebaseSignOut(auth)
+      localStorage.removeItem('google_oauth_access_token')
+      localStorage.removeItem('google_user')
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error)
+      throw error
+    }
+  }
+
+  // Obter usuário atual
+  getCurrentUser() {
+    return auth.currentUser
+  }
+
+  // Observar mudanças no estado de autenticação
+  onAuthStateChange(callback) {
+    return onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Usuário está autenticado
+        const userData = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName,
+          email: firebaseUser.email,
+          imageUrl: firebaseUser.photoURL
+        }
+        
+        // Obter token
+        const token = localStorage.getItem('google_oauth_access_token')
+        
+        // Atualizar último login no Supabase
+        await this.updateLastLogin(firebaseUser.uid)
+        
+        callback(userData)
+      } else {
+        callback(null)
+      }
+    })
+  }
+
+  // Atualizar último login no Supabase
+  async updateLastLogin(firebaseUid) {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          last_login: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('firebase_uid', firebaseUid)
+      
+      if (error) {
+        console.error('Erro ao atualizar último login:', error)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar último login:', error)
+    }
+  }
+
+  // Obter token de acesso atual
+  async getAccessToken() {
+    return localStorage.getItem('google_oauth_access_token')
+  }
+}
+
+export default new AuthService()
+
+================================================================================
+PARTE 4: CONFIGURAÇÃO DO SUPABASE
+================================================================================
+
+4.1 CRIAR TABELA DE USUÁRIOS NO SUPABASE
+-----------------------------------------
+1. Acesse seu projeto no Supabase: https://supabase.com/dashboard
+2. Vá em "Table Editor" no menu lateral
+3. Clique em "New table"
+4. Configure:
+   - Name: users
+   - Description: Tabela de usuários autenticados
+5. Adicione as seguintes colunas:
+
+   Nome da Coluna        | Tipo          | Opções
+   ----------------------|---------------|----------------------------------
+   id                    | uuid          | Primary key, Default: uuid_generate_v4()
+   firebase_uid          | text          | Unique, Not null
+   email                 | text          | Unique, Not null
+   name                  | text          | Nullable
+   image_url             | text          | Nullable
+   provider              | text          | Default: 'google'
+   last_login            | timestamptz   | Nullable
+   created_at            | timestamptz   | Default: now()
+   updated_at            | timestamptz   | Default: now()
+
+6. Clique em "Save"
+
+4.2 CRIAR ÍNDICES (OPCIONAL, mas recomendado)
+----------------------------------------------
+Execute no SQL Editor do Supabase:
+
+-- Índice para busca rápida por firebase_uid
+CREATE INDEX IF NOT EXISTS idx_users_firebase_uid ON users(firebase_uid);
+
+-- Índice para busca rápida por email
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+4.3 CONFIGURAR ROW LEVEL SECURITY (RLS) - SEGURANÇA
+----------------------------------------------------
+Execute no SQL Editor do Supabase:
+
+-- Habilitar RLS na tabela users
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Política: Usuários podem ler seus próprios dados
+CREATE POLICY "Users can read own data"
+ON users
+FOR SELECT
+USING (auth.uid()::text = firebase_uid);
+
+-- Política: Usuários podem atualizar seus próprios dados
+CREATE POLICY "Users can update own data"
+ON users
+FOR UPDATE
+USING (auth.uid()::text = firebase_uid);
+
+NOTA: Se você quiser permitir que qualquer usuário autenticado veja outros usuários,
+pode criar políticas mais permissivas. Ajuste conforme sua necessidade.
+
+================================================================================
+PARTE 5: IMPLEMENTAÇÃO DO COMPONENTE DE LOGIN
+================================================================================
+
+5.1 CRIAR COMPONENTE DE LOGIN
+------------------------------
+Crie um arquivo: src/components/Login.jsx
+
+import { useState, useEffect } from 'react'
+import authService from '../services/authService'
+import './Login.css'
+
+function Login({ onLogin }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    // Verificar se já está autenticado
+    const unsubscribe = authService.onAuthStateChange(async (user) => {
+      if (user) {
+        const token = await authService.getAccessToken()
+        if (token) {
+          onLogin(user, token)
+        }
+      }
+    })
+
+    return () => unsubscribe()
+  }, [onLogin])
+
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { user, token } = await authService.signInWithGoogle()
+      onLogin(user, token)
+    } catch (err) {
+      console.error('Erro ao fazer login:', err)
+      
+      let errorMessage = 'Erro ao fazer login com Google.'
+      
+      if (err.code === 'auth/popup-closed-by-user') {
+        errorMessage = 'Login cancelado. Por favor, tente novamente.'
+      } else if (err.code === 'auth/popup-blocked') {
+        errorMessage = 'Popup bloqueado. Por favor, permita popups para este site.'
+      } else if (err.code === 'auth/unauthorized-domain') {
+        errorMessage = 'Domínio não autorizado. Verifique as configurações do Firebase.'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="login-container">
+      <div className="login-box">
+        <h1>Bem-vindo</h1>
+        <p>Faça login com sua conta Google para continuar</p>
+        
+        {error && <div className="error-message">{error}</div>}
+        
+        <button 
+          onClick={handleGoogleLogin} 
+          disabled={loading}
+          className="google-login-button"
+        >
+          {loading ? 'Entrando...' : 'Entrar com Google'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default Login
+
+================================================================================
+PARTE 6: FLUXO COMPLETO DE AUTENTICAÇÃO
+================================================================================
+
+6.1 FLUXO DE LOGIN/CADASTRO
+----------------------------
+1. Usuário clica em "Entrar com Google"
+2. Popup do Google aparece pedindo autorização
+3. Usuário autoriza o acesso
+4. Firebase autentica o usuário e retorna:
+   - Dados do usuário (uid, nome, email, foto)
+   - Token de acesso OAuth do Google
+5. Token é salvo no localStorage
+6. Dados do usuário são salvos/atualizados no Supabase:
+   - Se o usuário não existe: cria novo registro
+   - Se o usuário já existe: atualiza último login e dados
+7. Usuário é redirecionado para a área logada
+
+6.2 FLUXO DE LOGOUT
+-------------------
+1. Usuário clica em "Sair"
+2. Firebase faz logout
+3. Tokens são removidos do localStorage
+4. Usuário é redirecionado para tela de login
+
+6.3 VERIFICAÇÃO DE AUTENTICAÇÃO
+--------------------------------
+O Firebase mantém a sessão ativa mesmo após recarregar a página.
+Use onAuthStateChange para detectar mudanças no estado de autenticação.
+
+================================================================================
+PARTE 7: USANDO O TOKEN COM GOOGLE DRIVE API
+================================================================================
+
+7.1 OBTER TOKEN DE ACESSO
+--------------------------
+O token está salvo no localStorage após o login:
+
+const token = localStorage.getItem('google_oauth_access_token')
+
+7.2 FAZER REQUISIÇÕES PARA GOOGLE DRIVE API
+--------------------------------------------
+Exemplo de como buscar arquivos do Drive:
+
+async function getDriveFiles() {
+  const token = localStorage.getItem('google_oauth_access_token')
+  
+  if (!token) {
+    throw new Error('Não autenticado')
+  }
+
+  const response = await fetch(
+    'https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27video%2F%27',
+    {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error('Erro ao buscar arquivos')
+  }
+
+  const data = await response.json()
+  return data.files
+}
+
+================================================================================
+PARTE 8: VARIÁVEIS DE AMBIENTE (.env)
+================================================================================
+
+8.1 CRIAR ARQUIVO .env
+----------------------
+Na raiz do projeto, crie um arquivo .env:
+
+# Firebase Config
+VITE_FIREBASE_API_KEY=AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+VITE_FIREBASE_AUTH_DOMAIN=seu-projeto.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=seu-projeto-id
+VITE_FIREBASE_STORAGE_BUCKET=seu-projeto.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=123456789012
+VITE_FIREBASE_APP_ID=1:123456789012:web:abcdef123456
+
+# Google Cloud (opcional, se precisar usar diretamente)
+VITE_GOOGLE_API_KEY=AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz
+VITE_GOOGLE_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
+
+# Supabase
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anon-aqui
+
+8.2 ATUALIZAR CONFIGURAÇÕES PARA USAR .env
+-------------------------------------------
+Atualize src/config/firebase.js:
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
+
+Atualize src/config/supabase.js:
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+================================================================================
+PARTE 9: CHECKLIST DE IMPLEMENTAÇÃO
+================================================================================
+
+FIREBASE:
+[ ] Projeto criado no Firebase Console
+[ ] Authentication habilitado
+[ ] Google Provider configurado
+[ ] Domínios autorizados configurados
+[ ] Credenciais do Firebase copiadas
+[ ] Arquivo firebase.js criado e configurado
+
+GOOGLE CLOUD:
+[ ] Google Drive API ativada
+[ ] Tela de consentimento OAuth configurada
+[ ] Usuários de teste adicionados
+[ ] ID do Cliente OAuth criado
+[ ] URIs de redirecionamento configuradas
+[ ] Chave de API criada (opcional)
+
+SUPABASE:
+[ ] Projeto criado no Supabase
+[ ] Tabela 'users' criada
+[ ] Colunas configuradas corretamente
+[ ] Índices criados (opcional)
+[ ] Row Level Security configurado
+[ ] Credenciais do Supabase copiadas
+[ ] Arquivo supabase.js criado e configurado
+
+CÓDIGO:
+[ ] Dependências instaladas (firebase, @supabase/supabase-js)
+[ ] Serviço de autenticação criado
+[ ] Componente de login criado
+[ ] Integração com Supabase implementada
+[ ] Fluxo de login testado
+[ ] Fluxo de logout testado
+[ ] Verificação de autenticação implementada
+[ ] Arquivo .env criado com todas as credenciais
+
+TESTES:
+[ ] Login com Google funciona
+[ ] Dados são salvos no Supabase após login
+[ ] Token de acesso é obtido corretamente
+[ ] Token funciona com Google Drive API
+[ ] Logout funciona corretamente
+[ ] Sessão persiste após recarregar página
+
+================================================================================
+PARTE 10: TROUBLESHOOTING
+================================================================================
+
+ERRO: "Access blocked: This app's request is invalid"
+SOLUÇÃO:
+- Verifique se o Client ID está correto
+- Verifique se as URIs de redirecionamento estão configuradas corretamente
+- Verifique se o domínio está autorizado no Firebase
+
+ERRO: "Firebase: Error (auth/unauthorized-domain)"
+SOLUÇÃO:
+- Adicione o domínio em Firebase Console > Authentication > Settings > Authorized domains
+
+ERRO: "Supabase: relation 'users' does not exist"
+SOLUÇÃO:
+- Crie a tabela 'users' no Supabase (veja seção 4.1)
+
+ERRO: "Token expirado"
+SOLUÇÃO:
+- O token do Google OAuth expira após 1 hora
+- Implemente renovação automática ou peça login novamente
+
+ERRO: "Popup bloqueado"
+SOLUÇÃO:
+- Configure o navegador para permitir popups do seu domínio
+- Ou use redirect em vez de popup (signInWithRedirect)
+
+================================================================================
+PARTE 11: MELHORIAS E RECURSOS ADICIONAIS
+================================================================================
+
+11.1 RENOVAÇÃO AUTOMÁTICA DE TOKEN
+-----------------------------------
+Implemente renovação automática do token antes de expirar:
+
+// Verificar se token está próximo de expirar e renovar
+async function refreshTokenIfNeeded() {
+  // Implementar lógica de renovação
+}
+
+11.2 PERMISSÕES ADICIONAIS
+---------------------------
+Se precisar de mais permissões do Google Drive, adicione escopos:
+
+googleProvider.addScope('https://www.googleapis.com/auth/drive')
+googleProvider.addScope('https://www.googleapis.com/auth/drive.file')
+
+11.3 SINCRONIZAÇÃO DE DADOS
+----------------------------
+Sincronize dados adicionais do usuário entre Firebase e Supabase:
+
+- Preferências do usuário
+- Histórico de atividades
+- Configurações personalizadas
+
+11.4 NOTIFICAÇÕES
+-----------------
+Configure notificações no Supabase para eventos de autenticação:
+
+- Novo usuário cadastrado
+- Login realizado
+- Dados atualizados
+
+================================================================================
+FIM DO MANUAL
+================================================================================
+
+Este manual fornece todas as informações necessárias para implementar
+autenticação com Google/Firebase e integração com Supabase.
+
+IMPORTANTE:
+- Nunca commite o arquivo .env no Git
+- Adicione .env no .gitignore
+- Mantenha as credenciais seguras
+- Use variáveis de ambiente em produção
+- Configure Row Level Security no Supabase para segurança
+
+Para dúvidas ou problemas, consulte a documentação oficial:
+- Firebase: https://firebase.google.com/docs
+- Supabase: https://supabase.com/docs
+- Google Drive API: https://developers.google.com/drive/api
